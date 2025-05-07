@@ -32,7 +32,7 @@ SPHERE_POS = [0.35, 0.1, 0.025]
 
 FREQUENCY = 30
 URDF_PATH = "piper_description/urdf/piper_description_virtual_eef_free_gripper.urdf"
-DOWN_SAMPLE = 4
+DOWN_SAMPLE = 4 # Don't change this
 
 
 

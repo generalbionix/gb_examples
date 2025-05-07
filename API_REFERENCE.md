@@ -6,6 +6,7 @@ The `GeneralBionixClient` class provides methods to interact with the external s
 *   **`crop_point_cloud(self, pcd: o3d.geometry.PointCloud, x: int, y: int) -> PointCloudData`**:
     *   Takes an Open3D point cloud and user-selected pixel coordinates (x, y).
     *   NOTE: The pointcloud data is expected in flattened RGB-D order. See `create_pointcloud()` in `sim.py` for an example.
+    *   NOTE: The RGD-D image used to create the pointcloud should be 480x640 resolution, then downsampled to 480x160 before sent.
     *   Sends the point cloud data and coordinates to the Point Cloud Cropping service.
     *   Returns the cropped point cloud of the object at the x, y coordinate (`PointCloudData` Pydantic model).
 *   **`predict_grasps(self, cropped_pcd_data: PointCloudData) -> GraspsPredictionResponse`**:

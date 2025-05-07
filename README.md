@@ -2,6 +2,10 @@
 
 This repository demonstrates a pipeline for predicting and executing robot grasps using a PyBullet simulation environment and the General Bionix API for point cloud processing and grasp planning.
 
+![Simulation Environment](assets/sim.png)
+
+
+
 
 ## Running the Example
 
