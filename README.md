@@ -25,7 +25,7 @@ pip install -r requirements.txt
 ```bash
 python grasp_example.py
 ```
-**After running the command, a PyBullet simulation window will pop up, and an image from the camera's perspective will be displayed. Click on an object in this image (except the tray which is fixed). The service will return grasp predictions. Close the grasp viewer to watch the robot grasp the object and place it in the tray!**
+**After running the command, a PyBullet simulation window will pop up, and an image from the camera's perspective will be displayed. Click on an object in this display (except the tray which is fixed) then close the image display. The service will then return grasp predictions so watch the robot grasp the object and place it in the tray!**
 
 The object positions can be changed in `grasp_example.py` but note that our grasping model predicts grasp orientations relative to the camera position, so it may be hard to find IK solutions when moving the objects.
 
