@@ -39,7 +39,7 @@ The core components are:
     *   Predicting potential grasps from point clouds.
     *   Filtering grasps based on reachability.
 3.  **`grasp_example.py`**: An example script orchestrating the entire pipeline: simulation setup, data acquisition, service calls, visualization, and grasp execution.
-4.  **`vis.py`**: Utilities for visualizing point clouds and grasps, including user interaction for selecting regions.
+4.  **`vis.py`**: Utilities picking points on the image.
 5.  **`transform.py`**: Functions for coordinate transformations (e.g., camera frame to robot frame).
 6.  **`cameras.py`**: Configuration details for simulated cameras.
 
@@ -56,9 +56,8 @@ The `grasp_example.py` script demonstrates the end-to-end process:
 6.  **Predict Grasps**: Calls `client.predict_grasps` with the cropped point cloud data. The returned grasps are in the camera's coordinate frame.
 7.  **Transform Grasps**: Uses `env.transform_grasps_to_robot_frame` (which internally uses `transform.py`) to convert the predicted grasps from the camera frame to the robot's base frame.
 8.  **Filter Grasps**: Calls `client.filter_grasps` with the robot-frame grasps to identify reachable ones.
-9.  **Visualize Valid Grasps**: Uses `vis.visualize_grasps` to display the *valid* grasps (transformed back to camera frame for visualization consistency) overlaid on the *cropped* point cloud.
-10. **Select Grasp**: Chooses the first valid grasp returned by the filtering service.
-11. **Execute Grasp**: Converts the chosen grasp pose (rotation matrix to Euler angles) and calls `env.execute_grasp_sequence` to perform the pick-and-lift motion in the simulation.
+9.  **Select Grasp**: Chooses the first valid grasp returned by the filtering service.
+10. **Execute Grasp**: Converts the chosen grasp pose (rotation matrix to Euler angles) and calls `env.execute_grasp_sequence` to perform the pick-and-lift motion in the simulation.
 
 ## Simulation (`sim.py`)
 
