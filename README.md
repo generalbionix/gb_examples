@@ -18,16 +18,29 @@ conda activate grasp_example
 pip install -r requirements.txt
 ```
 
-**Add your API key and specify your OS ("MAC" or "LINUX") in the `API_KEY` and `OS` variables at the top of `grasp_example.py`.**
+**Running the point + click grasp example:**
 
-**Running the Example:**
+
+Add your API key and specify your OS ("MAC" or "LINUX") in the `API_KEY` and `OS` variables at the top of `grasp_example.py`.
+
 
 ```bash
 python grasp_example.py
 ```
-**After running the command, a PyBullet simulation window will pop up, and an image from the camera's perspective will be displayed. Click on an object in this display (except the tray which is fixed) then close the image display. The service will then return grasp predictions so watch the robot grasp the object and place it in the tray!**
+After running the command, a PyBullet simulation window will pop up, and an image from the camera's perspective will be displayed. Click on an object in this display (except the tray which is fixed) then close the image display. The service will then return grasp predictions so watch the robot grasp the object and place it in the tray!
 
-The object positions can be changed in `grasp_example.py` but note that our grasping model predicts grasp orientations relative to the camera position, so it may be hard to find IK solutions when moving the objects.
+
+**Running the GPT-4o grasp agent example:**
+
+Add your API key to the `API_KEY` variable at the top of `agent_example.py`.
+
+```bash
+export OPENAI_API_KEY="<Insert your OpenAI key>"
+python agent_example.py
+```
+
+This is an example of how to build a VLM agent using our API. We construct a visual prompt which is first displayed on the screen then sent to GPT-4o to decide which object to grasp. You can think of this as a reasoning layer above the grasping API that can make high-level plans.  
+
 
 ## Overview
 
@@ -84,3 +97,8 @@ The `sim.py` module provides the `Sim` base class and the `SimGrasp` derived cla
 *   **Grasp Execution**:
     *   Modify the sequence of movements (e.g., approach strategy, lift height) within the `execute_grasp_sequence` method in `sim.py`.
     *   Change the robot control parameters (e.g., IK solver settings, joint control forces) in the `robot_control` method.
+
+**Acknowledgements:**
+
+Thank you to the following projects:
+- [OWG](https://github.com/gtziafas/OWG)

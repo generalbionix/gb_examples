@@ -1,0 +1,48 @@
+prompt_root_dir: 'visual_prompt/prompts'
+image_size_h: 448
+image_size_w: 448
+image_crop: null
+
+grounding:
+  prompt_name: 'referring_segmentation.txt'
+  prompt_template: "Description: {user_input}"
+
+  include_raw_image: True
+
+  use_subplot_prompt: False
+  subplot_size: 224
+  
+  do_refine_marks: False
+  refine_marks:
+    maximum_hole_area: 0.01
+    maximum_island_area: 0.01
+    minimum_mask_area: 0.02
+    maximum_mask_area: 1.0
+
+  do_inctx: False
+  inctx_prompt_name: null
+
+  visualizer:
+    label:
+      text_include: True
+      text_scale: 0.5
+      text_thickness: 2
+      text_padding: 2
+      text_position: 'TOP_CENTER'
+    box:
+      box_include: False
+      box_thickness: 2
+    mask:
+      mask_include: True
+      mask_opacity: 0.25
+    polygon:
+      polygon_include: True
+      polygon_thickness: 2
+
+  request:
+    model_name: 'gpt-4o'
+    detail: 'auto'
+    temperature: 0.00000001
+    n: 1
+    max_tokens: 512
+    seed: 12

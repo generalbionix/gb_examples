@@ -1,4 +1,5 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
+from dataclasses import dataclass, field
 
 import numpy as np
 import pybullet as pb
@@ -18,6 +19,7 @@ DUCK_ORIENTATION = [np.pi / 2, 0, 0]
 DUCK_SCALING = 0.7
 TRAY_ORIENTATION = [0, 0, 0]
 TRAY_SCALING = 0.3
+TRAY_POS = [0.3, -0.3, 0.0]
 CUBE_ORIENTATION = [0, 0, 0]
 CUBE_SCALING = 0.7
 SPHERE_ORIENTATION = [0, 0, 0]
@@ -25,7 +27,27 @@ SPHERE_SCALING = 0.05
 SPHERE_MASS = 0.1
 CUBE_RGBA = [1, 0, 0, 1]
 SPHERE_RGBA = [0.3, 1, 0, 1]
-TRAY_POS = [0.3, -0.2, 0.0]
+
+# Gripper constants
+GRIPPER_OPEN_WIDTH = 0.07
+GRIPPER_CLOSED_WIDTH = 0.007
+
+# Grasp sequence constants
+GRASP_APPROACH_HEIGHT_OFFSET = 0.1
+GRASP_POSITION_OFFSET = 0.01
+TRAY_DROP_HEIGHT_OFFSET = 0.15
+TRAY_DROP_ORIENTATION = [np.pi, 0, 0]
+
+
+@dataclass
+class ObjectInfo:
+    """Object information for simulation."""
+    urdf_path: str
+    position: List[float]
+    orientation: List[float] = field(default_factory=lambda: [0, 0, 0])
+    scaling: float = 1.0
+    color: Optional[List[float]] = None  # RGBA color, e.g. [1, 0, 0, 1]
+    mass: Optional[float] = None  # Mass in kg
 
 
 class Sim:
@@ -117,13 +139,11 @@ class Sim:
 class SimGrasp(Sim):
     def __init__(
         self,
+        objects: List[ObjectInfo] = None,
         urdf_path: Optional[str] = None,
         start_pos: List[float] = [0, 0, 0],
         start_orientation: List[float] = [0, 0, 0],  # Euler angles [roll, pitch, yaw]
         frequency: int = 30,
-        cube_pos: List[float] = [0.3, 0., 0.025],
-        duck_pos: List[float] = [0.2, 0.2, 0.0],
-        sphere_pos: List[float] = [0.35, 0.1, 0.025],
     ):
         """
         Initializes the simulation environment specifically for grasping tasks.
@@ -131,6 +151,7 @@ class SimGrasp(Sim):
         Inherits from Sim and adds object loading, camera setup, and grasping-specific parameters.
 
         Args:
+            objects (List[ObjectInfo]): List of objects to load into the simulation.
             urdf_path (Optional[str]): Path to the robot's URDF file.
             start_pos (List[float]): Initial base position [x, y, z]. Defaults to [0, 0, 0].
             start_orientation (List[float]): Initial base orientation [roll, pitch, yaw] in radians. Defaults to [0, 0, 0].
@@ -141,15 +162,36 @@ class SimGrasp(Sim):
         self.realsensed435_cam = cameras.RealSenseD435.CONFIG
         self._random = np.random.RandomState(None)
         self.frequency = frequency
-        pb.changeDynamics(self.robot_id, 7, lateralFriction=2, spinningFriction=1)
-        pb.changeDynamics(self.robot_id, 8, lateralFriction=2, spinningFriction=1)
-        self.duck_id = self.add_object("duck_vhacd.urdf", duck_pos, DUCK_ORIENTATION, globalScaling=DUCK_SCALING)
-        self.tray_id = self.add_object("tray/traybox.urdf", TRAY_POS, TRAY_ORIENTATION, globalScaling=TRAY_SCALING) # The tray is fixed!
-        self.cube_id = self.add_object("cube_small.urdf", cube_pos, CUBE_ORIENTATION, globalScaling=CUBE_SCALING)
-        self.sphere_id = self.add_object("sphere2.urdf", sphere_pos, SPHERE_ORIENTATION, globalScaling=SPHERE_SCALING)
-        pb.changeDynamics(self.sphere_id, -1, mass=SPHERE_MASS)  # Reduce sphere mass to 0.1 kg
-        pb.changeVisualShape(self.cube_id, -1, rgbaColor=CUBE_RGBA) # R, G, B, Alpha
-        pb.changeVisualShape(self.sphere_id, -1, rgbaColor=SPHERE_RGBA) # R, G, B, Alpha
+        pb.changeDynamics(self.robot_id, 7, lateralFriction=6, spinningFriction=3)
+        pb.changeDynamics(self.robot_id, 8, lateralFriction=6, spinningFriction=3)
+        
+        # Dictionary to store object IDs
+        self.object_ids = {}
+        
+        # Load all objects
+        for i, obj in enumerate(objects):
+            obj_id = self.add_object(
+                obj.urdf_path, 
+                obj.position, 
+                obj.orientation, 
+                globalScaling=obj.scaling
+            )
+            
+            # Set object properties if specified
+            if obj.color is not None:
+                pb.changeVisualShape(obj_id, -1, rgbaColor=obj.color)
+            
+            if obj.mass is not None:
+                pb.changeDynamics(obj_id, -1, mass=obj.mass)
+            
+            # Store object ID with a key based on the object type
+            obj_type = obj.urdf_path.split('/')[-1].split('.')[0]
+            if obj_type in self.object_ids:
+                # If we already have this type, add index
+                self.object_ids[f"{obj_type}_{i}"] = obj_id
+            else:
+                self.object_ids[obj_type] = obj_id
+
     
     def step_simulation(self) -> None:
         """
@@ -220,15 +262,15 @@ class SimGrasp(Sim):
             flags=pb.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
             renderer=pb.ER_BULLET_HARDWARE_OPENGL,
         )
-
-        # Get color image
-        color_image_size = (config["image_size"][0], config["image_size"][1], 4)
-        color = np.array(color, dtype=np.uint8).reshape(color_image_size)
-        color = color[:, :, :3]  # remove alpha channel
         if config["noise"]:
             color = np.int32(color)
             color += np.int32(self._random.normal(0, 3, color.shape))
             color = np.uint8(np.clip(color, 0, 255))
+
+        # Convert color data to numpy array and reshape
+        color = np.array(color, dtype=np.uint8).reshape(config["image_size"][0], config["image_size"][1], 4)
+        rgb = color[:, :, :3]  # Remove alpha channel
+        self.obs = {'image': rgb, 'depth': depth, 'seg': segm}
 
         # Get depth image.
         depth_image_size = (config["image_size"][0], config["image_size"][1])
@@ -392,19 +434,19 @@ class SimGrasp(Sim):
         """
         # Move above the target pose with gripper open
         self.robot_control(
-            0.07, [target_pose[0], target_pose[1], target_pose[2] + 0.1], target_pose[3:]
+            GRIPPER_OPEN_WIDTH, [target_pose[0], target_pose[1], target_pose[2] + GRASP_APPROACH_HEIGHT_OFFSET], target_pose[3:]
         )
         # Move to the target grasp pose
         self.robot_control(
-            0.07, [target_pose[0], target_pose[1], target_pose[2]-0.03], target_pose[3:]
+            GRIPPER_OPEN_WIDTH, [target_pose[0], target_pose[1], target_pose[2] - GRASP_POSITION_OFFSET], target_pose[3:]
         )
         # Close the gripper
         self.robot_control(
-            0.007, [target_pose[0], target_pose[1], target_pose[2]-0.03], target_pose[3:]
+            GRIPPER_CLOSED_WIDTH, [target_pose[0], target_pose[1], target_pose[2] - GRASP_POSITION_OFFSET], target_pose[3:]
         )
         # Lift the object
         self.robot_control(
-            0.007, [target_pose[0], target_pose[1], target_pose[2] + 0.1], target_pose[3:]
+            GRIPPER_CLOSED_WIDTH, [target_pose[0], target_pose[1], target_pose[2] + GRASP_APPROACH_HEIGHT_OFFSET], target_pose[3:]
         )
 
     def drop_object_in_tray(self) -> None:
@@ -412,17 +454,22 @@ class SimGrasp(Sim):
         Moves the gripper over the tray, then opens it to drop the currently held object.
         """
         # Get tray position
-        tray_pos, _ = pb.getBasePositionAndOrientation(self.tray_id)
+        tray_id = self.tray_id if hasattr(self, 'tray_id') else self.object_ids.get('traybox', None)
+        if tray_id is None:
+            print("Warning: No tray found in simulation. Cannot drop object.")
+            return
+            
+        tray_pos, _ = pb.getBasePositionAndOrientation(tray_id)
         # Define target position above the tray center
-        drop_target_pos = [tray_pos[0], tray_pos[1], tray_pos[2] + 0.15] # Adjust height as needed
-        drop_target_orientation = [np.pi, 0, 0]
+        drop_target_pos = [tray_pos[0], tray_pos[1], tray_pos[2] + TRAY_DROP_HEIGHT_OFFSET] # Adjust height as needed
+        drop_target_orientation = TRAY_DROP_ORIENTATION
 
         # Move above the tray with gripper closed
         self.robot_control(
-            0.007, drop_target_pos, drop_target_orientation
+            GRIPPER_CLOSED_WIDTH, drop_target_pos, drop_target_orientation
         )
 
         # Open the gripper while maintaining position and orientation
         self.robot_control(
-            0.07, drop_target_pos, drop_target_orientation
+            GRIPPER_OPEN_WIDTH, drop_target_pos, drop_target_orientation
         )

@@ -18,29 +18,75 @@ from scipy.spatial.transform import Rotation as R
 
 from client import GeneralBionixClient
 from vis import ImgClick
-from sim import SimGrasp
+from sim import (
+    SimGrasp, 
+    ObjectInfo, 
+    CUBE_ORIENTATION, 
+    CUBE_SCALING, 
+    SPHERE_ORIENTATION, 
+    SPHERE_SCALING, 
+    TRAY_ORIENTATION, 
+    TRAY_SCALING, 
+    TRAY_POS, 
+    CUBE_RGBA, 
+    SPHERE_RGBA, 
+    SPHERE_MASS,
+    DUCK_ORIENTATION,
+    DUCK_SCALING
+)
 
 
 # User TODO
 API_KEY = "" # Use your API key here
 OS = "LINUX" # "MAC" or "LINUX"
 
-# Feel free to change these positions, but note that some positions are unreachable by the robot with IK.
-DUCK_POS = [0.2, 0.05, 0.]
-CUBE_POS = [0.3, 0., 0.025]
-SPHERE_POS = [0.35, 0.1, 0.025]
+# Define simulation objects
+SIMULATION_OBJECTS = [
+    ObjectInfo(
+        urdf_path="cube_small.urdf",
+        position=[0.3, 0.0, 0.025],
+        orientation=CUBE_ORIENTATION,
+        scaling=CUBE_SCALING,
+        color=CUBE_RGBA
+    ),
+    ObjectInfo(
+        urdf_path="cube_small.urdf",
+        position=[0.25, 0.1, 0.025],
+        orientation=CUBE_ORIENTATION,
+        scaling=CUBE_SCALING,
+        color=CUBE_RGBA
+    ),
+    ObjectInfo(
+        urdf_path="tray/traybox.urdf",
+        position=TRAY_POS,
+        orientation=TRAY_ORIENTATION,
+        scaling=TRAY_SCALING
+    ),
+    ObjectInfo(
+        urdf_path="sphere2.urdf",
+        position=[0.38, 0.05, 0.025],
+        orientation=SPHERE_ORIENTATION,
+        scaling=SPHERE_SCALING,
+        color=SPHERE_RGBA,
+        mass=SPHERE_MASS
+    ),
+    ObjectInfo(
+        urdf_path="duck_vhacd.urdf",
+        position=[0.2, 0.05, 0.],
+        orientation=DUCK_ORIENTATION,
+        scaling=DUCK_SCALING
+    )
+]
 
 FREQUENCY = 30
 URDF_PATH = "piper_description/urdf/piper_description_virtual_eef_free_gripper.urdf"
 DOWN_SAMPLE = 4 # Don't change this
 
 
-
-
 def main():
     """Main execution function for the grasp prediction pipeline."""
     # Initialize the simulation environment
-    env = SimGrasp(urdf_path=URDF_PATH, frequency=FREQUENCY, duck_pos=DUCK_POS, cube_pos=CUBE_POS, sphere_pos=SPHERE_POS)
+    env = SimGrasp(urdf_path=URDF_PATH, frequency=FREQUENCY, objects=SIMULATION_OBJECTS)
     client = GeneralBionixClient(api_key=API_KEY)
 
     # Render camera image and create initial point cloud
