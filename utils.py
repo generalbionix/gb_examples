@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Tuple
-
+import open3d as o3d
 
 def compute_mask_center_of_mass(mask: np.ndarray) -> Tuple[int, int]:
     """
@@ -32,3 +32,40 @@ def compute_mask_center_of_mass(mask: np.ndarray) -> Tuple[int, int]:
     center_y = np.sum(y_indices) / total_pixels
 
     return int(center_x), int(center_y)
+
+
+
+def downsample_pcd(pcd: o3d.geometry.PointCloud, down_sample: int) -> o3d.geometry.PointCloud:
+    """"
+    Uniformly downsample the point cloud for network transfer.
+    Args:
+        pcd: o3d.geometry.PointCloud: Orignal point cloud
+        down_sample: int
+    Returns:
+        o3d.geometry.PointCloud: Downsampled point cloud.
+    """
+    pcd_ds = pcd.uniform_down_sample(down_sample) # Downsample for faster processing
+    return pcd_ds
+
+
+def upsample_pcd(pcd_ds: o3d.geometry.PointCloud, pcd_full: o3d.geometry.PointCloud, up_sample: int) -> o3d.geometry.PointCloud:
+    """
+    Upsample the downsampled point cloud based on the original pointcloud using nearest neighbor search.
+    Args:
+        pcd_ds: o3d.geometry.PointCloud: Downsampled point cloud.
+        pcd_full: o3d.geometry.PointCloud: Orignal point cloud.
+        up_sample: int
+    Returns:
+        pcd_us: o3d.geometry.PointCloud: Upsampled point cloud.
+    """
+    k = up_sample 
+    voxel = pcd_full.get_max_bound() - pcd_full.get_min_bound()
+    avg_spacing = (np.linalg.norm(voxel) / np.cbrt(len(pcd_full.points)))  # ~mean NN spacing
+    radius = k * 0.05 * avg_spacing       # anything inside this radius was probably dropped
+    kdtree_full = o3d.geometry.KDTreeFlann(pcd_full)
+    hits = set()
+    for q in pcd_ds.points:                 # each “query” point
+        _, idxs, _ = kdtree_full.search_radius_vector_3d(q, radius)
+        hits.update(idxs)                       # collect everything nearby
+    pcd_us = pcd_full.select_by_index(list(hits))
+    return pcd_us

@@ -24,6 +24,12 @@ pip install -r requirements.txt
 Add your API key and specify your OS ("MAC" or "LINUX") in the `API_KEY` and `OS` variables at the top of `grasp_example.py`.
 
 
+In seperate terminal:
+```bash
+meshcat-server
+```
+
+Then open a new terminal:
 ```bash
 python grasp_example.py
 ```

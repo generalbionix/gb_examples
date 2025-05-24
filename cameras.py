@@ -13,14 +13,12 @@ class RealSenseD435:
     camera_focal_length = 462.14
     """
 
-    # Mimic RealSense D435 RGB-D camera parameters.
     image_size = (480, 640)
     intrinsics = np.array([[462.14, 0, 320], [0, 462.14, 240], [0, 0, 1]])
-
     # Set default camera poses.
     # relative to the manipulator
-    front_position = (0.3, 0, 0.5)
-    front_rotation = (0, np.pi, np.pi / 2)
+    front_position = (0, 0.1, 0.2)
+    front_rotation = (np.pi/4, np.pi*4/4, np.pi / 2)
     front_rotation = p.getQuaternionFromEuler(front_rotation)
     left_position = (0, 0.5, 0.75)
     left_rotation = (np.pi / 4.5, np.pi, np.pi / 4)
