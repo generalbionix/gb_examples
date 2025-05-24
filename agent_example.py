@@ -108,6 +108,7 @@ def main():
         pcd = env.create_pointcloud(color, depth)
         # Prepare visual prompt: segment objects, create masks, and mark them on the image.
         image, seg = env.obs['image'], env.obs['seg']
+        seg = np.array(seg).reshape(image.shape[:-1])
         obj_ids = np.unique(seg)[1:]
         all_masks = np.stack([seg == objID for objID in obj_ids])
         marker_data = {'masks': all_masks, 'labels': obj_ids}
