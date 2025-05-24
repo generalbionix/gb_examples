@@ -8,3 +8,4 @@ matplotlib==3.10.1
 easydict==1.13
 opencv_python_headless==4.8.1.78
 supervision==0.17.1
+meshcat
