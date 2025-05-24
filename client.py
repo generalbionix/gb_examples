@@ -3,9 +3,9 @@ from pydantic import BaseModel
 import requests
 import numpy as np
 import open3d as o3d
+import json
 
-
-URL = "https://gateway-335715160756.us-central1.run.app"
+URL = "https://api-gateway-main-bca6535.d2.zuplo.dev"
 HEADERS = {"Content-Type": "application/json"}
 
 
@@ -53,14 +53,14 @@ def call_gateway_service(service_name, payload, api_key):
     Args:
         service_name (str): Name of the service to call (must exist in services.json)
         payload (dict): The data to send to the service
-        api_key (str): Valid API key (must exist in api_keys.toml)
+        api_key (str): Valid API key to be used as Bearer token
     
     Returns:
         Response object from the service
     """
     url = f"{URL}/{service_name}"
     headers = {
-        "api-key": api_key,
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
@@ -78,7 +78,7 @@ class GeneralBionixClient:
         """
         self.headers = HEADERS
         self.api_key = api_key
-        self.headers["api_key"] = self.api_key
+        self.headers["Authorization"] = f"Bearer {self.api_key}"
 
 
     def crop_point_cloud(self, pcd: o3d.geometry.PointCloud, x: int, y: int) -> PointCloudData:
@@ -99,6 +99,7 @@ class GeneralBionixClient:
         )
         pcd_request = PointCloudCropRequest(pcd_data=pcd_data, x=x, y=y)
         json_payload = pcd_request.model_dump_json()
+        json.dump(json_payload, open("pcd_request.json", "w"))
         response = call_gateway_service("pcd_service", json_payload, self.api_key)
         response.raise_for_status()
         response_data = response.json()
