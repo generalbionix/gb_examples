@@ -200,6 +200,23 @@ class SimGrasp(Sim):
         pb.stepSimulation()
         time.sleep(1 / self.frequency)
 
+    def joint_pos(self, joint_pos: List[float]) -> None:
+        """
+        Sets the joint positions of the robot.
+        Args:
+            joint_pos: List[float]: The joint positions to set.
+        """
+        for i in range(len(joint_pos)):
+            pb.setJointMotorControl2(self.robot_id, i, pb.POSITION_CONTROL, joint_pos[i], force=5 * 240.0)
+
+    def add_debug_point(self, pos: List[float]) -> None:
+        """
+        Adds a debug point to the simulation.
+        Args:
+            pos: List[float]: The position of the point.
+        """
+        pb.addUserDebugPoints([pos], [[1, 0, 0]], pointSize=10, lifeTime=1000)
+
 
     def add_object(self, urdf_path: str, pos=[0.3, 0.15, 0.0], orientation=[np.pi / 2, 0, 0], globalScaling: float = 1.0) -> int:
         """
@@ -328,12 +345,6 @@ class SimGrasp(Sim):
 
         # Create point cloud from RGBD image
         pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_image, intrinsics)
-
-        # Flip pointcloud 180 around camera's x axis
-        pcd.transform(
-            [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
-        )
-
         return pcd
 
     def robot_control(self, gripper_width: float, tip_target_pos_: List[float], tip_target_orientation: Optional[List[float]] = None) -> None:
@@ -463,7 +474,7 @@ class SimGrasp(Sim):
         # Define target position above the tray center
         drop_target_pos = [tray_pos[0], tray_pos[1], tray_pos[2] + TRAY_DROP_HEIGHT_OFFSET] # Adjust height as needed
         drop_target_orientation = TRAY_DROP_ORIENTATION
-
+        
         # Move above the tray with gripper closed
         self.robot_control(
             GRIPPER_CLOSED_WIDTH, drop_target_pos, drop_target_orientation
@@ -473,3 +484,36 @@ class SimGrasp(Sim):
         self.robot_control(
             GRIPPER_OPEN_WIDTH, drop_target_pos, drop_target_orientation
         )
+    
+    def grasp(self, grasp_joint_angles: List[float]) -> None:
+        """
+        Goes to the grasp joint angles then closes the gripper.
+        Args:
+            grasp_joint_angles: List[float]: The joint angles to set.
+        """
+
+        open_joint_angles = grasp_joint_angles + [0, GRIPPER_OPEN_WIDTH / 2, -GRIPPER_OPEN_WIDTH / 2]
+        closed_joint_angles = grasp_joint_angles + [0, GRIPPER_CLOSED_WIDTH / 2, -GRIPPER_CLOSED_WIDTH / 2]
+        for i in range(30):
+            for i in range(len(open_joint_angles)):
+                pb.setJointMotorControl2(
+                    self.robot_id,
+                    i,
+                    pb.POSITION_CONTROL,
+                    open_joint_angles[i],
+                    force=5 * 240.0,
+                )
+            pb.stepSimulation()
+            time.sleep(1 / self.frequency)
+
+        for i in range(30):
+            for i in range(len(closed_joint_angles)):
+                pb.setJointMotorControl2(
+                    self.robot_id,
+                    i,
+                    pb.POSITION_CONTROL,
+                    closed_joint_angles[i],
+                    force=5 * 240.0,
+                )
+            pb.stepSimulation()
+            time.sleep(1 / self.frequency)
