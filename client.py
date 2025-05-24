@@ -5,7 +5,6 @@ import numpy as np
 import open3d as o3d
 import json
 
-URL = "https://api-gateway-main-bca6535.d2.zuplo.dev"
 HEADERS = {"Content-Type": "application/json"}
 
 
@@ -58,7 +57,7 @@ def call_gateway_service(service_name, payload, api_key):
     Returns:
         Response object from the service
     """
-    url = f"{URL}/{service_name}"
+    url = f"{service_name}"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -97,10 +96,8 @@ class GeneralBionixClient:
             points=np.asarray(pcd.points).tolist(),
             colors=np.asarray(pcd.colors).tolist(),
         )
-        pcd_request = PointCloudCropRequest(pcd_data=pcd_data, x=x, y=y)
-        json_payload = pcd_request.model_dump_json()
-        json.dump(json_payload, open("pcd_request.json", "w"))
-        response = call_gateway_service("pcd_service", json_payload, self.api_key)
+        pcd_request = PointCloudCropRequest(pcd_data=pcd_data, x=x, y=y).model_dump(exclude_defaults=True)
+        response = call_gateway_service("https://gb-services--pcd-grasp-pipeline-fastapi-app-entry.modal.run/process_item/", pcd_request, self.api_key)
         response.raise_for_status()
         response_data = response.json()
         return PointCloudData(**response_data)
@@ -116,9 +113,8 @@ class GeneralBionixClient:
         Returns:
             GraspsPredictionResponse: A response object containing a list of predicted grasps.
         """
-        request = GraspPredictionRequest(pcd_data=cropped_pcd_data)
-        json_payload = request.model_dump_json()
-        response = call_gateway_service("grasp_service", json_payload, self.api_key)
+        request = GraspPredictionRequest(pcd_data=cropped_pcd_data).model_dump(exclude_defaults=True)
+        response = call_gateway_service("https://gb-services--grasp-service-fastapi-app-entry.modal.run/get_grasps/", request, self.api_key)
         response.raise_for_status()
         grasps_response_data = response.json()
         return GraspsPredictionResponse(**grasps_response_data)
@@ -136,9 +132,8 @@ class GeneralBionixClient:
             GraspsFilteringResponse: A response object containing the indices of the valid grasps
                                      and optionally corresponding valid joint angles.
         """
-        request_obj = GraspsFilteringRequest(grasps=grasps)
-        json_payload = request_obj.model_dump_json()
-        response = call_gateway_service("grasp_filtering_service", json_payload, self.api_key)
+        request_obj = GraspsFilteringRequest(grasps=grasps).model_dump(exclude_defaults=True)
+        response = call_gateway_service("https://gb-services--grasp-filtering-service-fastapi-app-entry.modal.run/process_item/", request_obj, self.api_key)
         response.raise_for_status()
         print("Request successful. Parsing response...")
         response_data = response.json()
