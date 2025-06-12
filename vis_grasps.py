@@ -357,7 +357,8 @@ def render_grasp(
 def vis_grasps_meshcat(
     vis: meshcat.Visualizer, 
     grasps: List[Grasp], 
-    pcd: o3d.geometry.PointCloud
+    pcd: o3d.geometry.PointCloud,
+    real_robot: bool
 ) -> None:
     """
     Visualize grasp poses and point cloud data in MeshCat.
@@ -373,7 +374,7 @@ def vis_grasps_meshcat(
     grasps_inv = transform_grasps_inv(copy.deepcopy(grasps))
     rgb = (np.asarray(pcd.colors) * 255).astype('uint8')
     xyz = np.asarray(pcd.points)
-    cam_pose = make_transform_mat()
+    cam_pose = make_transform_mat(real_robot)
     draw_axes(vis, 'camera', T=cam_pose)
     for i in range(len(grasps_inv)):
         g = np.eye(4)

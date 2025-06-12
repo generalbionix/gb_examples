@@ -19,7 +19,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import open3d as o3d
 from typing import List
-from client import GeneralBionixClient, PointCloudData, Grasp
+from client import PointCloudData, Grasp
+from caching import CachedGeneralBionixClient
 from sim import (
     SimGrasp, 
     ObjectInfo, 
@@ -43,13 +44,17 @@ from utils import downsample_pcd, upsample_pcd
 from vis_grasps import vis_grasps_meshcat
 from transform import transform_pcd_cam_to_rob
 
-
+REAL_ROBOT = False
 # GPT-4o prompt
 USER_QUERY = "Identify the red cubes. If no red cubes are available then return an empty list."
 
 # User TODO
 API_KEY = "" # Use your API key here
 OS = "LINUX" # "MAC" or "LINUX"
+
+# Cache configuration - modify as needed  
+ENABLE_CACHE = False  # Set to False to disable caching
+CACHE_VERBOSE = 0    # 0=silent, 1=normal, 2=verbose
 
 
 # Define simulation objects
@@ -86,7 +91,6 @@ SIMULATION_OBJECTS = [
 
 
 FREQUENCY = 30
-DOWN_SAMPLE = 4 # Don't change this
 URDF_PATH = "piper_description/urdf/piper_description_virtual_eef_free_gripper.urdf"
 CONFIG_PATH = 'visual_prompt/config/visual_prompt_config.yaml'
 
@@ -98,7 +102,17 @@ def main():
     """Main execution function for the grasp prediction pipeline."""
     # Initialize the simulation environment
     env = SimGrasp(urdf_path=URDF_PATH, frequency=FREQUENCY, objects=SIMULATION_OBJECTS)
-    client = GeneralBionixClient(api_key=API_KEY)
+    client = CachedGeneralBionixClient(
+        api_key=API_KEY,
+        enable_cache=ENABLE_CACHE,
+        verbose=CACHE_VERBOSE
+    )
+    
+    # Display cache statistics
+    stats = client.cache_stats()
+    if stats["cache_enabled"]:
+        print(f"📊 Cache stats: {stats['total_files']} files, {stats['total_size_mb']} MB")
+    
     vis = launch_visualizer()
     grounder = VisualPrompterGrounding(CONFIG_PATH, debug=True)
 
@@ -130,21 +144,14 @@ def main():
         center_x, center_y = compute_mask_center_of_mass(marker_data["masks"][marker_data["labels"].tolist().index(selected_target_id)])
         assert center_x is not None and center_y is not None, "No object clicked"
         # Downsample the point cloud for faster processing.
-        pcd_ds = downsample_pcd(pcd, DOWN_SAMPLE)
         print("Requesting Point Cloud Cropping service...")
         # Crop the point cloud around the target object using its 2D center.
-        cropped_pcd_data = client.crop_point_cloud(pcd_ds, int(center_x/DOWN_SAMPLE), int(center_y))
-
-
+        cropped_pcd_data = client.crop_point_cloud(pcd, int(center_x), int(center_y))
 
         # Convert service response back to Open3D point cloud format
         cropped_pcd_cam_frame = o3d.geometry.PointCloud()
         cropped_pcd_cam_frame.points = o3d.utility.Vector3dVector(np.array(cropped_pcd_data.points))
         cropped_pcd_cam_frame.colors = o3d.utility.Vector3dVector(np.array(cropped_pcd_data.colors))
-
-        # Upsample cropped point cloud back to original resolution
-        # This ensures we maintain detail while benefiting from faster cropping
-        cropped_pcd_crop_full_cam_frame = upsample_pcd(cropped_pcd_cam_frame, pcd, DOWN_SAMPLE)
 
         # -------------------------------------------------------------------------
         # Step 6: Coordinate Frame Transformations
@@ -152,10 +159,10 @@ def main():
         print("Transforming point clouds to robot coordinate frame...")
         # Transform cropped point cloud from camera frame to robot base frame
         # This is necessary because grasp planning works in robot coordinates
-        cropped_pcd_robot_frame = transform_pcd_cam_to_rob(cropped_pcd_crop_full_cam_frame)
+        cropped_pcd_robot_frame = transform_pcd_cam_to_rob(cropped_pcd_cam_frame, real_robot=REAL_ROBOT)
         
         # Also transform full scene point cloud for visualization
-        pcd_robot_frame = transform_pcd_cam_to_rob(pcd)
+        pcd_robot_frame = transform_pcd_cam_to_rob(pcd, real_robot=REAL_ROBOT)
         
         # Prepare cropped point cloud data for grasp prediction service
         cropped_pcd_data_robot_frame = PointCloudData(
@@ -182,7 +189,7 @@ def main():
         
         # Call external service to filter grasps for kinematic reachability
         # This ensures the robot can actually achieve the predicted grasp poses
-        filter_response = client.filter_grasps(predicted_grasps_robot_frame)
+        filter_response = client.filter_grasps(predicted_grasps_robot_frame, robot_name="piper")
         valid_grasp_idxs = filter_response.valid_grasp_idxs
         valid_grasp_joint_angles = filter_response.valid_grasp_joint_angles
 
@@ -211,7 +218,7 @@ def main():
         # Visualize all valid grasps in 3D viewer
         print("Launching 3D visualization of valid grasps...")
         print("Check the MeshCat visualizer to see the grasp poses")
-        vis_grasps_meshcat(vis, valid_grasps, pcd_robot_frame)
+        vis_grasps_meshcat(vis, valid_grasps, pcd_robot_frame, real_robot=REAL_ROBOT)
 
         # Add visual debug marker at chosen grasp location in simulation
         env.add_debug_point(chosen_grasp.translation)

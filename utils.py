@@ -2,6 +2,7 @@ import numpy as np
 from typing import Tuple
 import open3d as o3d
 
+
 def compute_mask_center_of_mass(mask: np.ndarray) -> Tuple[int, int]:
     """
     Compute the center of mass of a binary segmentation mask.
@@ -48,20 +49,24 @@ def downsample_pcd(pcd: o3d.geometry.PointCloud, down_sample: int) -> o3d.geomet
     return pcd_ds
 
 
-def upsample_pcd(pcd_ds: o3d.geometry.PointCloud, pcd_full: o3d.geometry.PointCloud, up_sample: int) -> o3d.geometry.PointCloud:
+def upsample_pcd(pcd_ds: o3d.geometry.PointCloud, pcd_full: o3d.geometry.PointCloud, up_sample: int, real_robot=False) -> o3d.geometry.PointCloud:
     """
     Upsample the downsampled point cloud based on the original pointcloud using nearest neighbor search.
     Args:
         pcd_ds: o3d.geometry.PointCloud: Downsampled point cloud.
         pcd_full: o3d.geometry.PointCloud: Orignal point cloud.
-        up_sample: int
+        real_robot: bool: Whether the robot is real or simulated.
+        up_sample: int: Upsampling factor.
     Returns:
         pcd_us: o3d.geometry.PointCloud: Upsampled point cloud.
     """
     k = up_sample 
     voxel = pcd_full.get_max_bound() - pcd_full.get_min_bound()
     avg_spacing = (np.linalg.norm(voxel) / np.cbrt(len(pcd_full.points)))  # ~mean NN spacing
-    radius = k * 0.05 * avg_spacing       # anything inside this radius was probably dropped
+    if real_robot:
+        radius = k * 0.05 * avg_spacing / 40      # anything inside this radius was probably dropped
+    else:
+        radius = k * 0.05 * avg_spacing       # anything inside this radius was probably dropped
     kdtree_full = o3d.geometry.KDTreeFlann(pcd_full)
     hits = set()
     for q in pcd_ds.points:                 # each “query” point
@@ -69,3 +74,17 @@ def upsample_pcd(pcd_ds: o3d.geometry.PointCloud, pcd_full: o3d.geometry.PointCl
         hits.update(idxs)                       # collect everything nearby
     pcd_us = pcd_full.select_by_index(list(hits))
     return pcd_us
+
+
+def get_3d_point_from_2d_coordinates(pcd: o3d.geometry.PointCloud, x: int, y: int) -> Tuple[float, float, float]:
+    """
+    Get the 3D point from a 2D click on the point cloud's image.
+    Args:
+        pcd: o3d.geometry.PointCloud: Point cloud.
+        x: int: X coordinate of the click.
+        y: int: Y coordinate of the click.
+    Returns:
+        Tuple[float, float, float]: 3D point.
+    """
+    points = np.asarray(pcd.points)
+    return points[y * 640 + x]
