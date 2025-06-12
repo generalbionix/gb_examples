@@ -6,6 +6,7 @@ from typing import List
 from client import Grasp
 import cameras
 from dataclasses import dataclass
+import os
 
 from compute_transform_mat import REAL_ROBOT_TRANSFORM_PATH, REAL_ROBOT_SCALING_FACTOR_PATH
 
@@ -50,6 +51,7 @@ def make_transform_mat(real_robot : bool) -> np.array:
         np.array: Transformation matrix
     """
     if real_robot:
+        assert os.path.exists(REAL_ROBOT_TRANSFORM_PATH) and os.path.exists(REAL_ROBOT_SCALING_FACTOR_PATH), "No transform found at /config. Have you run calibration.py?" 
         transform_mat = np.load(
             REAL_ROBOT_TRANSFORM_PATH,
             allow_pickle=True,

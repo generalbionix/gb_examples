@@ -58,7 +58,16 @@ python3 grasp_example_so100.py
 - Wait for the API to return a grasp prediction. You will see the prediction in the pybullet sim and have the option to execute on the real robot.
 - Click on a location on the image window to place and close the window.
 
-
+## Troubleshooting 
+- If you're having trouble installing pybullet with `pip install -r requirements`, try removing pybullet from `requirements.txt` and doing this instead:
+```bash
+conda install ffmpeg -c conda-forge
+conda install -c conda-forge pybullet
+```
+- If you have `No device found` error for the realsense, try running `grasp_example_so100.py` with sudo: 
+```bash
+sudo python3 grasp_example_so100.py
+```
 ## Tips On Getting Good Grasps
 - Realsense position matters. If you are getting HTTP 400 errors from the grasp prediction service, the pointcloud is likely too small/ from a bad angle. Try moving the realsense camera close/ at an isometric view angle.
 - The grasping service currently struggles with small, heavy, or hard to grasp objects. Start off with light cuboid objects.

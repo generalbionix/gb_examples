@@ -227,7 +227,7 @@ def main():
     """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Robot calibration script')
-    parser.add_argument('--os', type=str, default=DEFAULT_OS, choices=['LINUX', 'MAC'],
+    parser.add_argument('--os', type=str, required=True, choices=['LINUX', 'MAC'],
                        help='Operating system, options: LINUX, MAC')
     args = parser.parse_args()
         
