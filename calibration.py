@@ -21,7 +21,7 @@ import numpy as np
 import threading
 import argparse
 from typing import List, Tuple
-
+import os
 from so100_client import SO100Client
 from utils import get_3d_point_from_2d_coordinates
 from capture_realsense_pointcloud import capture_pointcloud
@@ -232,6 +232,9 @@ def main():
     args = parser.parse_args()
         
     setup_simulation()
+
+    if not os.path.exists("config"):
+        os.makedirs("config")
     robot_id = pb.loadURDF(
         URDF_PATH,
         basePosition=[0,0,0],

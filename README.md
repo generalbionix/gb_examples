@@ -1,6 +1,6 @@
 # General Bionix Grasping Example
 
-This repository demonstrates a pipeline for predicting and executing robot grasps using a PyBullet simulation environment and the General Bionix API for point cloud processing and grasp planning.
+This repository shows how you can interface with the General Bionix zero shot pick + place API.
 
 ![Simulation Environment](assets/sim.png)
 
@@ -8,6 +8,8 @@ This repository demonstrates a pipeline for predicting and executing robot grasp
 
 
 ## Running SO100 Point -> Pick + Place
+
+Take a look at this video to see a demo: https://www.youtube.com/watch?v=NUZ7NLDOc9M
 
 ### Prerequisistes: 
 - SO100 Robot Arm
@@ -38,7 +40,8 @@ pip install -e .
 pip install -e ".[feetech]"
 ```
 
-2. **_Calibration_**: Refer to the comments at the top of calibration.py for instructions. 
+2. **_Calibration_**: Refer to this instructions video: https://www.youtube.com/watch?v=XEKbkn06HIA
+and the comments at the top of calibration.py for instructions. 
 - It's recommended to get ~0.01m error for good accuracy.
 - Note that if the robot base or camera moves, recalibration is required.
 3. **_Run Meshcat_**: In a seperate terminal for visualizing the pointcloud and grasp predictions.

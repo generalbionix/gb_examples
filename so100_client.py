@@ -36,6 +36,8 @@ class SO100Client:
         self.robot.connect(calibrate=False)
         if not os.path.exists(CALIBRATION_PATH) or force_calibration:
             self.robot.calibrate()
+            if not os.path.exists("config"):
+                os.makedirs("config")
             self.robot._save_calibration(Path(CALIBRATION_PATH))
         else:
             self.robot._load_calibration(Path(CALIBRATION_PATH))
