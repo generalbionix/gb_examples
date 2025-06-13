@@ -182,8 +182,6 @@ class RobotPoseRecorder:
             # Update shared position under lock to avoid race conditions
             with self._robot_pose_lock:
                 self.current_pos = list(pos)  # Make sure it's a mutable list copy
-            # Visualize the EEF position in pybullet
-            pb.addUserDebugPoints([pos], [[1, 0, 0]], pointSize=10, lifeTime=2*1/FREQUENCY)
             pb.stepSimulation()
             time.sleep(1 / FREQUENCY)
 
