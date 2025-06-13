@@ -10,7 +10,7 @@ import time
 import cameras
 from transform import transform_cam_to_rob
 from client import Grasp
-
+from so100_client import SO100Client
 
 EEF_IDX = 9  
 
@@ -134,6 +134,52 @@ class Sim:
         pb.setGravity(0, 0, -9.81)
         pb.loadURDF("plane.urdf")
         return int(physicsClient)
+
+    def add_pointcloud(
+        self,
+        pcd: o3d.geometry.PointCloud,
+        default_color: Tuple[float, float, float] = (0.1, 0.6, 1.0),
+        point_size: float = 2.0,
+        life_time: float = 0.0,
+        max_pts: int = 15000,
+    ) -> Optional[int]:
+        """Visualise an Open3D point cloud in the PyBullet GUI.
+
+        Args:
+            pcd: open3d.geometry.PointCloud instance to visualise.
+            default_color: RGB colour to use when the cloud lacks colours (0‒1 range).
+            point_size: Pixel diameter of each rendered point.
+            life_time: Duration in seconds the points stay visible (0 = permanent).
+            max_pts: Maximum number of points to draw (down-samples randomly above this).
+
+        Returns:
+            The debug item unique ID returned by PyBullet, or ``None`` if the cloud is empty.
+        """
+        # Convert to numpy arrays
+        pts = np.asarray(pcd.points)
+        if pts.size == 0:
+            return None
+
+        # Determine colours
+        if pcd.has_colors():
+            cols = np.asarray(pcd.colors)
+        else:
+            cols = np.tile(default_color, (pts.shape[0], 1))
+
+        # Down-sample very large clouds to maintain GUI performance
+        if len(pts) > max_pts:
+            idx = np.random.choice(len(pts), max_pts, replace=False)
+            pts = pts[idx]
+            cols = cols[idx]
+
+        # PyBullet expects Python lists, not numpy arrays. Provide first two arguments positionally
+        # to avoid keyword-name mismatches across PyBullet versions.
+        return pb.addUserDebugPoints(
+            pts.tolist(),                         # point positions
+            cols.tolist(),                        # point colours RGB(A)
+            pointSize=point_size,
+            lifeTime=life_time,
+        )
 
 
 class SimGrasp(Sim):
@@ -485,35 +531,141 @@ class SimGrasp(Sim):
             GRIPPER_OPEN_WIDTH, drop_target_pos, drop_target_orientation
         )
     
+    def _execute_joint_control(self, joint_angles: List[float], steps: int = 30) -> None:
+        """
+        Helper method to execute joint control for a given set of joint angles.
+        Args:
+            joint_angles: List[float]: The joint angles to set.
+            steps: int: Number of simulation steps to execute.
+        """
+        for _ in range(steps):
+            for i in range(len(joint_angles)):
+                pb.setJointMotorControl2(
+                    self.robot_id,
+                    i,
+                    pb.POSITION_CONTROL,
+                    joint_angles[i],
+                    force=5 * 240.0,
+                )
+            pb.stepSimulation()
+            time.sleep(1 / self.frequency)
+
     def grasp(self, grasp_joint_angles: List[float]) -> None:
         """
         Goes to the grasp joint angles then closes the gripper.
         Args:
             grasp_joint_angles: List[float]: The joint angles to set.
         """
-
         open_joint_angles = grasp_joint_angles + [0, GRIPPER_OPEN_WIDTH / 2, -GRIPPER_OPEN_WIDTH / 2]
         closed_joint_angles = grasp_joint_angles + [0, GRIPPER_CLOSED_WIDTH / 2, -GRIPPER_CLOSED_WIDTH / 2]
-        for i in range(30):
-            for i in range(len(open_joint_angles)):
-                pb.setJointMotorControl2(
-                    self.robot_id,
-                    i,
-                    pb.POSITION_CONTROL,
-                    open_joint_angles[i],
-                    force=5 * 240.0,
-                )
-            pb.stepSimulation()
-            time.sleep(1 / self.frequency)
+        
+        # Move to position with gripper open
+        self._execute_joint_control(open_joint_angles, steps=30)
+        
+        # Close the gripper
+        self._execute_joint_control(closed_joint_angles, steps=30)
 
-        for i in range(30):
-            for i in range(len(closed_joint_angles)):
-                pb.setJointMotorControl2(
-                    self.robot_id,
-                    i,
-                    pb.POSITION_CONTROL,
-                    closed_joint_angles[i],
-                    force=5 * 240.0,
-                )
-            pb.stepSimulation()
-            time.sleep(1 / self.frequency)
+    def place(self, place_eef_pos: List[float]) -> None:
+        """
+        Moves the robot to the specified placement position and opens the gripper to release the object.
+        
+        Args:
+            place_eef_pos: List[float]: The target end-effector position [x, y, z] where the object should be placed.
+        """
+        self.robot_control(GRIPPER_CLOSED_WIDTH, place_eef_pos + [0, 0, 0.05])
+        self.robot_control(GRIPPER_CLOSED_WIDTH, place_eef_pos)
+        self.robot_control(GRIPPER_OPEN_WIDTH, place_eef_pos)
+    
+    def so100_grasp_sequence(self, grasp_joint_angles: List[float], so100_client: SO100Client) -> List[List[float]]:
+        """
+        Constucts a sequence of waypoints for the SO100 robot to perform a grasp. 
+        This function executes this waypoints in sim and returns the real robot joint angle waypoints.
+        Args:
+            grasp_joint_angles: List[float]: The joint angles to set.
+            so100_client: SO100Client: The SO100 client to use.
+        Returns:
+            List[List[float]]: A list of waypoints for the SO100 robot.
+        """
+        jaw_closed_angle = 0  
+        jaw_open_angle = 1
+
+        so100_waypoint0 = so100_client.read_joints()
+        so100_waypoint0[2] -= 0.6
+
+        # Add a [0] in pybullet for the base link in the URDF (only in sim)
+        grasp_joint_angles = [0.0] + grasp_joint_angles
+
+        # Execute the grasp in simulation
+        self._execute_joint_control(grasp_joint_angles, steps=30)
+
+        # Grasp pose with jaw open
+        so100_waypoint2 = grasp_joint_angles[1:].copy()
+
+        # Grasp pose with jaw closed
+        closed_joint_angles = grasp_joint_angles.copy()
+        closed_joint_angles[-1] = jaw_closed_angle
+        
+        # Go to waypoint in sim
+        self._execute_joint_control(closed_joint_angles, steps=30)
+
+        # Grasp pose with jaw closed
+        so100_waypoint3 = closed_joint_angles[1:].copy()
+
+
+        # Jaw closed but move elbow up for lift
+        lift_obj_joint_angles = grasp_joint_angles.copy()
+        lift_obj_joint_angles[2] -= 0.6 # Move elbow up for lift
+        lift_obj_joint_angles[-1] = jaw_closed_angle
+
+        # Go to waypoint in sim
+        self._execute_joint_control(lift_obj_joint_angles, steps=30)
+
+        # Go above the grasp pose with jaw open
+        so100_waypoint1 = lift_obj_joint_angles[1:].copy()
+        so100_waypoint1[-1] = jaw_open_angle
+
+        # Lift gripper up with jaw closed
+        so100_waypoint4 = lift_obj_joint_angles[1:].copy()
+        return [so100_waypoint0, so100_waypoint1, so100_waypoint2, so100_waypoint3, so100_waypoint4]
+
+    def so100_place_sequence(self, place_point: List[float], so100_client: SO100Client) -> List[List[float]]:
+        """
+        Constucts a sequence of waypoints for the SO100 robot to perform a place. 
+        This function executes this waypoints in sim and returns the real robot joint angle waypoints.
+        Args:
+            place_point: List[float]: The target end-effector position [x, y, z] where the object should be placed.
+            so100_client: SO100Client: The SO100 client to use.
+        Returns:
+            List[List[float]]: A list of waypoints for the SO100 robot.
+        """
+        jaw_closed_angle = 0  
+        jaw_open_angle = 1
+
+        gripper_link_idx = 5
+
+        # Do IK on the place point
+        target_joint_angles = pb.calculateInverseKinematics(
+            self.robot_id,
+            gripper_link_idx,
+            targetPosition=place_point,
+            lowerLimits=self.lower_limits,
+            upperLimits=self.upper_limits,
+            jointRanges=self.joint_ranges,
+            maxNumIterations=1000,
+        )
+        target_joint_angles = [0] + list(target_joint_angles)
+        place_waypoint1 = target_joint_angles[1:]
+        place_waypoint1[-1] = jaw_closed_angle
+
+        # Go to place point with jaw closed in
+        self._execute_joint_control(target_joint_angles, steps=30)
+        
+        # Open the jaw
+        place_waypoint2 = target_joint_angles[1:]
+        place_waypoint2[-1] = jaw_open_angle
+
+        # Open jaw to drop object in sim
+        self._execute_joint_control(target_joint_angles, steps=30)
+        
+        place_waypoint0 = so100_client.read_joints()
+        return [place_waypoint0, place_waypoint1, place_waypoint2]

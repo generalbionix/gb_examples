@@ -1,9 +1,16 @@
+"""
+This module provides a Python client for interacting with the General Bionix robotics API.
+All requests are formatted as pydantic models.
+"""
+
 from typing import List, Optional
 from pydantic import BaseModel
 import requests
 import numpy as np
 import open3d as o3d
 import json
+import base64
+import cv2
 
 HEADERS = {"Content-Type": "application/json"}
 
@@ -21,13 +28,7 @@ class PointCloudData(BaseModel):
     points: List[List[float]]
     colors: Optional[List[List[float]]] = None
 
-
-class PointCloudCropRequest(BaseModel):
-    pcd_data: PointCloudData
-    x: int
-    y: int
-
-
+    
 class GraspsPredictionResponse(BaseModel):
     grasps: List[Grasp]
 
@@ -36,13 +37,25 @@ class GraspPredictionRequest(BaseModel):
     pcd_data: PointCloudData
 
 
-class GraspsFilteringRequest(BaseModel):
+class GraspFilteringRequest(BaseModel):
     grasps: List[Grasp]
+    robot_name: str
 
 
-class GraspsFilteringResponse(BaseModel):
+class GraspFilteringResponse(BaseModel):
     valid_grasp_idxs: List[int]
     valid_grasp_joint_angles: List[List[float]]
+
+
+class ImageData(BaseModel):
+    image_base64: str  # Base64 encoded JPEG image data
+
+
+class ImageSegmentationRequest(BaseModel):
+    image_data: ImageData
+    x: int
+    y: int
+
 
 
 def call_gateway_service(service_name, payload, api_key):
@@ -92,15 +105,23 @@ class GeneralBionixClient:
         Returns:
             PointCloudData: The data representing the cropped point cloud, containing points and optional colors.
         """
-        pcd_data = PointCloudData(
-            points=np.asarray(pcd.points).tolist(),
-            colors=np.asarray(pcd.colors).tolist(),
-        )
-        pcd_request = PointCloudCropRequest(pcd_data=pcd_data, x=x, y=y).model_dump(exclude_defaults=True)
-        response = call_gateway_service("https://gb-services--pcd-grasp-pipeline-fastapi-app-entry.modal.run/process_item/", pcd_request, self.api_key)
+        # Convert point cloud colors to image array
+        colors_array = np.asarray(pcd.colors)
+        colors_image = (colors_array * 255).astype(np.uint8).reshape(480, 640, 3)
+        
+        # Encode as JPEG and convert to base64
+        _, buffer = cv2.imencode('.jpg', colors_image)
+        img_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        img_data = ImageData(image_base64=img_base64)
+        img_request = ImageSegmentationRequest(image_data=img_data, x=x, y=y).model_dump(exclude_defaults=True)
+        response = call_gateway_service("https://gb-services--pcd-grasp-pipeline-temp-fastapi-app-entry.modal.run/segment_image/", img_request, self.api_key)
         response.raise_for_status()
         response_data = response.json()
-        return PointCloudData(**response_data)
+        mask = response_data["mask"]
+        colors = np.asarray(pcd.colors)[np.array(mask).flatten()]
+        points = np.asarray(pcd.points)[np.array(mask).flatten()]
+        return PointCloudData(points=points.tolist(), colors=colors.tolist())
 
 
     def predict_grasps(self, cropped_pcd_data: PointCloudData) -> GraspsPredictionResponse:
@@ -120,7 +141,7 @@ class GeneralBionixClient:
         return GraspsPredictionResponse(**grasps_response_data)
 
 
-    def filter_grasps(self, grasps: List[Grasp]) -> GraspsFilteringResponse:
+    def filter_grasps(self, grasps: List[Grasp], robot_name: str) -> GraspFilteringResponse:
         """Sends a request to filter grasps based on reachability."""
         """
         Sends a request to the grasp filtering service filter grasps based on reachability.
@@ -132,9 +153,9 @@ class GeneralBionixClient:
             GraspsFilteringResponse: A response object containing the indices of the valid grasps
                                      and optionally corresponding valid joint angles.
         """
-        request_obj = GraspsFilteringRequest(grasps=grasps).model_dump(exclude_defaults=True)
+        request_obj = GraspFilteringRequest(grasps=grasps, robot_name=robot_name).model_dump(exclude_defaults=True)
         response = call_gateway_service("https://gb-services--grasp-filtering-service-fastapi-app-entry.modal.run/process_item/", request_obj, self.api_key)
         response.raise_for_status()
         print("Request successful. Parsing response...")
         response_data = response.json()
-        return GraspsFilteringResponse(**response_data)
+        return GraspFilteringResponse(**response_data)
